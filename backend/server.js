@@ -1,12 +1,12 @@
 // ============================================
 // Project Nexus - Backend Server Entry Point
 // ============================================
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { testConnection, syncDatabase } = require('./src/config/initDatabase');
 
 // Initialize Express app
 const app = express();
@@ -64,8 +64,8 @@ app.get('/api', (req, res) => {
     endpoints: {
       health: '/health',
       api: '/api',
-      // TODO: Add route endpoints as they are created
-      // auth: '/api/auth',
+      auth: '/api/auth',
+      // TODO: Add additional route endpoints as they are created
       // customers: '/api/customers',
       // tickets: '/api/tickets',
       // notifications: '/api/notifications'
@@ -74,17 +74,17 @@ app.get('/api', (req, res) => {
 });
 
 // ============================================
-// Route Imports (To be added)
+// Route Imports
 // ============================================
-// const authRoutes = require('./src/routes/auth.routes');
+const authRoutes = require('./src/routes/authRoutes');
 // const customerRoutes = require('./src/routes/customer.routes');
 // const ticketRoutes = require('./src/routes/ticket.routes');
 // const notificationRoutes = require('./src/routes/notification.routes');
 
 // ============================================
-// Mount Routes (To be added)
+// Mount Routes
 // ============================================
-// app.use('/api/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 // app.use('/api/customers', customerRoutes);
 // app.use('/api/tickets', ticketRoutes);
 // app.use('/api/notifications', notificationRoutes);
@@ -117,45 +117,52 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// Database Connection (To be implemented)
+// Database Connection & Server Start
 // ============================================
-// const db = require('./src/config/database');
-// db.authenticate()
-//   .then(() => console.log('Database connected successfully'))
-//   .catch(err => console.error('Database connection error:', err));
-
-// ============================================
-// Start Server
-// ============================================
-const server = app.listen(PORT, () => {
-  console.log('\n' + '='.repeat(50));
-  console.log('  Project Nexus - Backend Server');
-  console.log('='.repeat(50));
-  console.log(`  Environment: ${NODE_ENV}`);
-  console.log(`  Server running on port: ${PORT}`);
-  console.log(`  Server URL: http://localhost:${PORT}`);
-  console.log(`  Health Check: http://localhost:${PORT}/health`);
-  console.log(`  API Info: http://localhost:${PORT}/api`);
-  console.log('='.repeat(50) + '\n');
-});
-
-// ============================================
-// Graceful Shutdown
-// ============================================
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('\nSIGINT signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
+testConnection().then(async (connected) => {
+  if (connected) {
+    // Sync database tables
+    await syncDatabase();
+    
+    // Start Server
+    const server = app.listen(PORT, () => {
+      console.log('\n' + '='.repeat(50));
+      console.log(' Project Nexus - Backend Server');
+      console.log('='.repeat(50));
+      console.log(` Environment: ${NODE_ENV}`);
+      console.log(` Server running on port: ${PORT}`);
+      console.log(` Server URL: http://localhost:${PORT}`);
+      console.log(` Health Check: http://localhost:${PORT}/health`);
+      console.log(` API Info: http://localhost:${PORT}/api`);
+      console.log(` Auth Endpoints: http://localhost:${PORT}/api/auth`);
+      console.log('='.repeat(50) + '\n');
+    });
+    
+    // ============================================
+    // Graceful Shutdown
+    // ============================================
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM signal received: closing HTTP server');
+      server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+      });
+    });
+    
+    process.on('SIGINT', () => {
+      console.log('\nSIGINT signal received: closing HTTP server');
+      server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+      });
+    });
+  } else {
+    console.error('❌ Failed to connect to database. Server not started.');
+    process.exit(1);
+  }
+}).catch(error => {
+  console.error('❌ Server startup error:', error);
+  process.exit(1);
 });
 
 module.exports = app;
